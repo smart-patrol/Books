@@ -1,0 +1,311 @@
+---
+title: "Prac_DS_Chap3"
+author: "Charles J Frenzel"
+date: "June 6, 2015"
+output: html_document
+---
+
+```{r Setup}
+library(XML)
+library(RSQLite)
+library(stringr)
+library(ggplot2)
+library(ggthemr)
+library(gridExtra)
+
+ggthemr('earth')
+
+year <- 2013
+url <- 
+paste("http://sports.yahoo.com/nfl/stats/byteam?group=Offense&
+cat=Total&conference=NFL&year=season_",year,"&sort=530&old_cat
+egory=Total&old_group=Offense")
+
+offense <- readHTMLTable(url, encoding = 'UTF-8', colClasses = "character")[[7]]
+```
+
+```{r FormatData_Off}
+View(offense)
+
+offense <- offense[ , !names(offense) %in% ("")]
+str(offense)
+offense$Team <- as.character(offense$Team)
+
+offense[,2:13] <- apply(offense[,2:13], 2, as.numeric)
+offense[ ,14] <- as.numeric(substr(offense$TOP, 1, 2))* 60 +
+  as.numeric(substr(offense$TOP, 4, 6))
+
+View(offense)
+```
+
+```{r FormatData_Def}
+url <- 
+paste("http://sports.yahoo.com/nfl/stats/byteam?group=Defense&
+cat=Total&conference=NFL&year=season_",year,"&sort=530&old_cat
+egory=Total&old_group=Defense")
+
+defense <- readHTMLTable(url, encoding = "UTF-8", colClasses = "character")[[7]]
+
+defense <- defense[ ,!names(defense) %in% c("")]
+defense[,1] <- as.character(defense[,1])
+defense[,2:13] <- apply(defense[,2:13], 2, as.numeric)
+
+View(defense)
+```
+
+
+```{r TakingAverageofColumns}
+apply(defense[ ,2:13], 2, mean)
+```
+
+
+```{r AnalyzingFootballData}
+comb <- merge(offense, defense, by.x = "Team", by.y = "Team")
+# renaming after - wtf - you do it before
+colnames(comb)[2] <- "Games"
+colnames(comb)[3] <- "OffPPG"
+colnames(comb)[4] <- "OffYPG"
+colnames(comb)[5] <- "OffPassYPG"
+colnames(comb)[6] <- "OffRushYPG"
+comb$G.y <- NULL
+colnames(comb)[15] <- "DefPPG"
+colnames(comb)[16] <- "DefYPG"
+colnames(comb)[17] <- "DefRushYPG"
+colnames(comb)[18] <- "DefPassYPG"
+
+ggplot(comb, aes(x = OffPPG)) + geom_histogram(alpha = 0.8,
+    breaks = seq(15, 40, by= 2.5), colour = "white") +
+  labs(title = "Offensive Points Per Game", x = "Offensive PPG",
+       "Number of Teams")
+#hist(comb$OffPPG, breaks=10)
+mean(comb$OffPPG) 
+sd(comb$OffPPG)
+summary(comb$OffPPG)
+
+ggplot(comb, aes(x = DefPPG)) + geom_histogram(alpha = 0.8,
+    breaks = seq(15, 30, by= 1), colour = "white") +
+  labs(title = "Defensive Points Per Game", x = "Defensive PPG",
+       "Number of Teams") +
+   scale_x_continuous( breaks = seq(15,30,1))
+#hist(comb$DefPPG, breaks = 10)
+
+
+ggplot(comb, aes(x = `1stD/G` )) + 
+  geom_histogram( breaks = seq(16,28,1), colour = "white") +
+  labs(title = "Offensive 1st Downs Per Game", x = "1st Downs/Game",
+       y = "Number of Teams") +
+  scale_x_continuous( breaks = seq(16,28,1))
+#hist(comb$`1stD/G`, breaks = 10)
+```
+
+
+```{r BarChartPPG}
+p1 <- ggplot(comb, aes( x = reorder(Team, OffPPG), y = OffPPG)) +
+  geom_bar(stat = "identity", color = "white"
+           , fill = "green", alpha =0.5) +
+  coord_flip() +
+  labs(title = "Avg Points Per Game", x = "Team"
+       , y = "Avg Points per Game") +
+  theme(plot.title = element_text(size = 18, face = "bold"))
+
+p2 <- ggplot(comb, aes( x = reorder(Team, DefYPG), y = DefYPG)) +
+  geom_bar(stat = "identity", color = "white"
+           , fill = "purple", alpha =0.5) +
+  coord_flip() +
+  labs(title = "Avg Yards Allowed Per Game", x = "Team"
+       , y = "Avg Yards Allowed Per Game") +
+  theme(plot.title = element_text(size = 18, face = "bold"))
+
+grid.arrange(p1, p2, ncol = 2)
+```
+
+
+```{r ScatterPlots}
+p1 <- ggplot(comb, aes(x = OffYPG, OffPPG)) +
+  geom_point(shape = 5, size = 3.5) + geom_smooth() +
+  labs(title = "Offense Yards vs. Points per Game",
+       y = "Points Per Game",
+       x = "Yards per Game") +
+  theme(plot.title = element_text(size=18, face="bold"))
+
+p2 <- ggplot(comb, aes(x = DefYPG, DefPPG)) +
+  geom_point(shape = 5, size = 3.5) + geom_smooth() +
+ labs(x="Yards Allowed per Game",y="Points Alloed per Game") +      ggtitle("Defense Yards vs. Points per Game") + 
+  theme(plot.title = element_text(size=18, face="bold"))
+
+grid.arrange(p1, p2, ncol=2)
+
+cor(comb$OffYPG, comb$OffPPG)
+cor(comb$DefYPG, comb$DefPPG)
+```
+
+
+```{r IndexConstruction}
+# higher numbers more strength
+offense$OPassStr <- max(offense[,5]) - offense[,5]
+offense$OPassStr <- (1 - (offense$OPassStr/ max(offense$OPassStr)))*100
+
+offense$ORushStr <- max(offense[,6]) - offense[,6]
+offense$ORushStr <- (1 - (offense$OPassStr/ max(offense$ORushStr)))*100
+
+offense$OPPGStr <- max(offense[,3]) - offense[,3]
+offense$OPPGStr <- (1 - (offense$OPPGStr / max(offense$OPPGStr))) *100
+
+offense$OYPGStr <- max(offense[,4]) - offense[,4]
+offense$OYPGStr <- (1 - (offense$OYPGStr / max(offense$OYPGStr))) *100
+
+offense$OffStr <- (offense$OPassStr + offense$ORushStr + offense$OPPGStr + offense$OYPGStr) / 4
+
+# lower numbers more strength
+defense$DPassStr <- max(defense[,6]) - defense[,6]
+defense$DPassStr <- defense$DPassStr / max(defense$DPassStr) * 100
+
+defense$DRushStr <- max(defense[,5]) - defense[,5]
+defense$DRushStr <- defense$DRushStr / max(defense$DRushStr) * 100
+
+defense$DPPGStr <- max(defense[,3]) - defense[,3]
+defense$DPPGStr <- defense$DPPGStr / max(defense$DPPGStr) * 100
+
+defense$DYPGStr <- max(defense[,4]) - defense[,4]
+defense$DYPGStr <- defense$DYPGStr / max(defense$DYPGStr) * 100
+
+defense$DefStr <- (defense$DPassStr + defense$DRushStr +  defense$DPPGStr + defense$DYPGSt) / 4
+```
+
+
+```{r SimulatingaGame}
+home_team <- "Chicago Bears"
+away_team <- "New Orleans Saints"
+
+off_game <- subset(offense, Team == home_team | Team == away_team)[,c(1,15,16,19)]
+
+def_game <- subset(defense, Team == home_team | Team == away_team)[,c(1,14,15,18)]
+
+game <- merge(off_game, def_game, by.x="Team", by.y = "Team")
+game
+
+game$Net_Pass[game$Team == home_team] <- game$OPassStr[game$Team == home_team] - game$DPassStr[game$Team == away_team]
+
+game$Net_Pass[game$Team == away_team] <- game$OPassStr[game$Team == away_team] - game$DPassStr[game$Team == home_team]
+
+game$Net_Rush[game$Team==home_team] <- 
+game$ORushStr[game$Team==home_team] - game$DRushStr[game$Team==away_team]
+
+game$Net_Rush[game$Team==away_team] <- 
+game$ORushStr[game$Team==away_team] - game$DRushStr[game$Team==home_team]
+
+game$Net_Total[game$Team==home_team] <- 
+game$OffStr[game$Team==home_team] - game$DefStr[game$Team==away_team]
+
+game$Net_Total[game$Team==away_team] <- 
+game$OffStr[game$Team==away_team] - game$DefStr[game$Team==home_team]
+
+game
+game$Net_Total <- game$Net_Pass + game$Net_Rush + game$Net_Total
+
+if(game$Net_Total[game$Team == home_team] >=
+   game$Net_Total[game$Team == away_team]){
+  
+  winner <- home_team
+  loser <- away_team
+} else {
+  winner <- away_team   
+  loser <- home_team
+   }
+
+print(paste(winner, "beat", loser))
+```
+
+
+```{r SimulatingMultipleGames}
+# make team schedules
+games_per_team <- 50
+
+for(week in 1:games_per_team){
+  home_index <- sample(1:32, 16, replace = F)
+  home_teams <- data.frame(HomeTeam = offense[home_index, 1])
+  away_teams <- data.frame(AwayTeam=offense[-home_index, 1])
+
+if(week==1){
+schedule <-cbind(Week=week,HomeTeam=home_teams,AwayTeam=away_teams)
+   }else{
+temp <-cbind(Week=week,HomeTeam=home_teams,AwayTeam=away_teams)
+
+schedule <- rbind(schedule,temp)
+   }
+}
+# make team tracker
+recs <- data.frame(Team = offense$Team)
+recs$Wins <- 0
+recs$Losses <- 0
+
+# play out games
+ for(i in 1:nrow(schedule)){
+   home_team <- schedule[i,2]
+   away_team <- schedule[i,3]
+   week <- schedule[i,1]
+  
+# calc differences    
+    off_game <- subset(offense,Team==home_team | 
+Team==away_team)[,c(1,15,16,19)]
+def_game <- subset(defense,Team==home_team | 
+Team==away_team)[,c(1,14,15,18)]
+game <- merge(off_game,def_game,by.x="Team",by.y="Team")
+game$Net_Pass[game$Team==home_team] <- 
+game$OPassStr[game$Team==home_team] - 
+game$DPassStr[game$Team==away_team]
+game$Net_Pass[game$Team==away_team] <- 
+game$OPassStr[game$Team==away_team] - 
+game$DPassStr[game$Team==home_team]
+game$Net_Rush[game$Team==home_team] <- 
+game$ORushStr[game$Team==home_team] - 
+game$DRushStr[game$Team==away_team]
+game$Net_Rush[game$Team==away_team] <- 
+game$ORushStr[game$Team==away_team] - 
+game$DRushStr[game$Team==home_team]
+game$Net_Total[game$Team==home_team] <- 
+game$OffStr[game$Team==home_team] - 
+game$DefStr[game$Team==away_team]
+game$Net_Total[game$Team==away_team] <- 
+game$OffStr[game$Team==away_team] - 
+game$DefStr[game$Team==home_team]
+game$Net_Total <- game$Net_Pass + game$Net_Rush + 
+game$Net_Total
+if(game$Net_Total[game$Team==home_team] >= 
+game$Net_Total[game$Team==away_team]){
+winner <- home_team
+loser <- away_team
+}else{
+winner <- away_team
+loser <- home_team
+}
+
+# record results of each game
+
+if(i == 1) {
+  winnerdf <- data.frame(Winner = winner)
+  loserdf <- data.frame(Loser = loser)
+  results <- cbind(winnerdf, loserdf)
+} else {
+    winnerdf <- data.frame(Winner = winner)
+    loserdf <- data.frame(Loser = loser)
+    temp <- cbind(winnerdf, loserdf)
+    results <- rbind(results, temp)
+  }
+  
+recs$Wins[recs$Team==winner] <- 
+as.numeric(recs$Wins[recs$Team==winner]) + 1
+
+recs$Losses[recs$Team==loser] <- 
+as.numeric(recs$Losses[recs$Team==loser]) + 1
+
+print(paste("Week", week,":", winner, "beat", loser))
+ }
+
+recs <- recs[order(-recs$Wins), ]
+head(recs)
+```
+
+
+
+

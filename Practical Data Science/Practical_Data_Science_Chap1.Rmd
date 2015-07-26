@@ -1,0 +1,170 @@
+---
+title: "Pratical_DS_Chap1"
+author: "Charles J Frenzel"
+date: "June 6, 2015"
+output: html_document
+---
+
+
+```{r LoadReadin}
+library(dplyr)
+library(ggplot2)
+library(reshape2)
+library(ggthemr)
+
+ggthemr('solarized')
+
+vech <- read.csv("C:/Users/Home/Documents/R_code/Data/vehicles.csv", stringsAsFactors = FALSE)
+```
+
+
+```{r DataPreview}
+glimpse(vech)
+
+dim(vech)
+
+names(vech)
+```
+
+
+```{r ExamineYears}
+length(unique(vech[, "year"]))
+
+min(vech$year)
+max(vech$year)
+```
+
+
+```{r Explore}
+table(vech$fuelType1)
+
+vech$trany[vech$trany == ""] <- NA
+
+vech <- vech %>%
+mutate( trany2 = ifelse(substr(trany,1,4) == "Auto", "Auto", "Manul"))
+
+vech$trany2 <- as.factor(vech$trany2)
+table(vech$trany2)
+```
+
+```{r}
+with(vech, table(sCharger, year))
+class(vech$sCharger)
+unique(vech$sCharger)
+class(vech$tCharger)
+unique(vech$tCharger)
+```
+
+
+```{r  AvgMpgByYear}
+mpgByYr <- vech %>%
+  group_by(year) %>%
+  summarize(avgMPG = mean(comb08),
+            avgHghy = mean(highway08),
+            avgCity = mean(city08))
+
+mpgByYr %>%
+  ggplot(., aes(x = year, y = avgMPG)) + geom_point() +
+  geom_smooth() + labs(x = "Year", y = "Average MPG", title = "All cars" ) +
+  ylim(15,25)
+
+table(vech$fuelType1)
+```
+
+```{r GasolineOnlyCars}
+gasCars <- vech %>%
+  filter( fuelType1 %in% c("Regular Gasoline", "Premium Gasoline", "Midgrade Gasoline"), fuelType2 == "", atvType != "Hybrid") 
+
+gasCars %>%
+  group_by(year) %>%
+  summarize(avgMPG = mean(comb08)) %>%
+  ggplot(., aes(x = year, y = avgMPG)) + geom_point() +
+  geom_smooth() + 
+  labs(x = "Year", y = "Average MPG", title = "Gasoline cars" ) +
+  ylim(15,25)
+```
+
+
+```{r LareEnginesStillMade?}
+typeof(gasCars$displ)
+gasCars$displ <- as.numeric(gasCars$displ)
+
+ggplot(gasCars, aes(displ, comb08)) + geom_point() +
+  geom_smooth()
+
+gasCars %>%
+  group_by(year) %>%
+  summarize( avg_Displ = mean(displ)) %>%
+  ggplot(., aes(year, avg_Displ)) + geom_point() +
+  geom_smooth() + labs(x="Year", y="Average Displacemnt")
+```
+
+
+```{r ImpactofDisplacement}
+gasCars %>%
+  group_by(year) %>%
+  summarize( avgMPG = mean(comb08), avgDispl = mean(displ)) %>%
+  melt(., id = "year") %>%
+  ggplot(., aes(x = factor(year), value, group = 1)) + geom_point() +
+  geom_smooth() + facet_wrap(~variable, ncol = 1, scales = "free_y") +
+  labs(x = "Year", y = "", title = "Avg Displ and MPG")
+```
+
+
+```{r WhatisEffcient?}
+gasCars %>%
+  filter(cylinders == "4") %>%
+  ggplot(., aes(factor(year), comb08)) + geom_boxplot() +
+  facet_wrap(~trany2, ncol = 1) + 
+  theme(axis.text.x = element_text(angle = 45)) +
+  labs(x = "Year", y = "MPG")
+```
+
+
+```{r ChangeinManual}
+gasCars %>%
+  filter(cylinders == "4") %>%
+  ggplot(., aes(x = factor(year), fill = factor(trany2))) + 
+  geom_bar(position = "fill") + labs(x = "Year", y = "Proportion of cars",
+  fill = "Transmission") + theme(axis.text.x = element_text(angle = 45)) +
+  geom_hline(yintercept = 0.5, linetype = 3, color = "black")
+```
+
+
+```{r MakesAndModels}
+carsMake <- gasCars %>%
+  filter(cylinders == "4") %>%
+  group_by(year) %>%
+  summarize( n_make = n_distinct(make))
+
+ggplot(carsMake, aes(x= year, y=n_make, group = 1)) + geom_line(size = 2) +
+  labs(x = "Year", y = "Number of Makes", title = "Four Cylinder Cars") +
+  ylim(0,50)
+
+#makes available
+gasCars4 <- gasCars %>%
+  filter(cylinders == "4") 
+
+uniqMakes <-by(gasCars4$make, gasCars4$year, function(x) unique(x))
+Reduce(intersect, uniqMakes)
+
+gasCars %>%
+  filter(cylinders == "4", make %in% c( "Ford", "Honda", "Toyota",
+  "Volkswagen", "Chevrolet",  "Nissan" , "Dodge" , "Mazda" ,
+"Mitsubishi", "Subaru", "Jeep")) %>%
+  group_by(year, make) %>%
+  summarize(avgMPG = mean(comb08)) %>%
+  ggplot(., aes(x = year , y = avgMPG)) + geom_line(size = 1.5) +
+  facet_wrap(~make, nrow=3)
+
+```
+
+
+
+
+
+
+
+
+
+
